@@ -167,34 +167,6 @@ func (s *sessionService) AgentQA(
 	releaseTurn := s.holdSandboxTurn(ctx, sessionID, agentConfig.SandboxConfigID)
 	defer releaseTurn()
 
-	// Reconcile all durable session attachments into the session's remote
-	// sandbox before the model can request shell or skill execution. The
-	// durable storage URL — not the ephemeral sandbox path — remains the
-	// source of truth. Gated on the sandbox manager advertising a session
-	// filesystem capability so provider-neutral remote wiring stays here.
-	var stagedAttachments []stagedSessionAttachment
-	stager, ok := s.agentService.(sessionAttachmentStager)
-	if !ok {
-		return errors.New("agent service does not support session attachment staging")
-	}
-	// Probe the backend this session's sandbox actually runs on. Gating on the
-	// process-wide manager instead could inspect a different backend than the
-	// named workspace config selected by this agent.
-	inputStore, storeErr := stager.sessionSandboxInputStore(ctx, sessionID, agentConfig.SandboxConfigID)
-	if storeErr != nil {
-		return fmt.Errorf("resolve sandbox file store for session %s: %w", sessionID, storeErr)
-	}
-	if inputStore != nil {
-		sessionAttachments, loadErr := s.messageRepo.GetSessionAttachments(ctx, sessionID)
-		if loadErr != nil {
-			return fmt.Errorf("load session attachments for sandbox staging: %w", loadErr)
-		}
-		stagedAttachments, err = stager.stageSessionAttachments(ctx, sessionID, agentConfig.SandboxConfigID, req.Session.TenantID, sessionAttachments)
-		if err != nil {
-			return fmt.Errorf("restore session attachments into sandbox: %w", err)
-		}
-	}
-
 	// Create agent engine with EventBus
 	logger.Info(ctx, "Creating agent engine")
 	engine, err := s.agentService.CreateAgentEngine(
@@ -248,10 +220,6 @@ func (s *sessionService) AgentQA(
 	if len(req.Attachments) > 0 {
 		agentQuery += req.Attachments.BuildPrompt()
 		logger.Infof(ctx, "Appended %d attachment(s) to agent query", len(req.Attachments))
-	}
-	if manifest := buildSandboxAttachmentsPrompt(stagedAttachments); manifest != "" {
-		agentQuery += manifest
-		logger.Infof(ctx, "Appended %d staged sandbox attachment path(s) to agent query", len(stagedAttachments))
 	}
 
 	// Scope envelopes (runtime_context / must_use) are injected per LLM call inside
@@ -321,19 +289,6 @@ func (s *sessionService) buildAgentConfig(
 	// The workspace is the one on the context rather than the agent's owner,
 	// because that is where resolveSandboxForExecution reads it; skillsForRun
 	// picks the config the same way the sandbox resolution does.
-	sandboxTenantID, _ := types.TenantIDFromContext(ctx)
-	skillConfigID, tenantSkills := skillsForRun(
-		ctx, s.sandboxPinner, s.sandboxConfigRepo, s.tenantSkillRepo,
-		sandboxTenantID, req.Session.ID, agentConfig.SandboxConfigID,
-	)
-	agentConfig.TenantSkills = tenantSkills
-	if len(tenantSkills) > 0 {
-		// The config named here is the one the skills came from, which is the
-		// pinned one whenever it differs from the agent's - the only case the
-		// line is worth reading.
-		logger.Infof(ctx, "Sandbox config %s offers %d installed skill(s) to this run",
-			skillConfigID, len(tenantSkills))
-	}
 
 	// Resolve knowledge bases using shared helper
 	kbIDs, knowledgeIDs, err := s.resolveKnowledgeBases(ctx, req)

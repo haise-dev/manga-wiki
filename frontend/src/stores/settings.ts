@@ -26,6 +26,7 @@ interface Settings {
   selectedAgentId: string;  // 当前选中的智能体ID
   selectedAgentSourceTenantId: string | null;  // 当使用共享智能体时，来源空间 ID（用于后端 model/KB/MCP 解析）
   autoCheckUpdate?: boolean; // 是否自动检查并下载更新
+  mangaMaxChapter?: number;  // 0 = unconstrained, > 0 = spoiler shield boundary
 }
 
 // Agent 配置接口
@@ -106,6 +107,7 @@ const defaultSettings: Settings = {
   selectedAgentId: BUILTIN_QUICK_ANSWER_ID,  // 默认选中快速问答模式
   selectedAgentSourceTenantId: null as string | null,  // 共享智能体来源空间 ID
   autoCheckUpdate: true,
+  mangaMaxChapter: 0,
 };
 
 export const useSettingsStore = defineStore("settings", {
@@ -163,7 +165,10 @@ export const useSettingsStore = defineStore("settings", {
     
     // 获取模型配置
     modelConfig: (state) => state.settings.modelConfig || defaultSettings.modelConfig,
-    
+
+    // Manga spoiler shield threshold
+    mangaMaxChapter: (state) => state.settings.mangaMaxChapter || 0,
+
     // 网络搜索是否启用
     isWebSearchEnabled: (state) => state.settings.webSearchEnabled || false,
     
@@ -225,6 +230,11 @@ export const useSettingsStore = defineStore("settings", {
     // 更新模型配置
     updateModelConfig(config: Partial<ModelConfig>) {
       this.settings.modelConfig = { ...this.settings.modelConfig, ...config };
+      localStorage.setItem("WeKnora_settings", JSON.stringify(this.settings));
+    },
+
+    setMangaMaxChapter(chapter: number) {
+      this.settings.mangaMaxChapter = Math.max(0, chapter || 0);
       localStorage.setItem("WeKnora_settings", JSON.stringify(this.settings));
     },
     

@@ -4,7 +4,6 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/Tencent/WeKnora/internal/sandbox"
 	"github.com/stretchr/testify/require"
 )
 
@@ -31,7 +30,7 @@ func TestApplyResolvedEnvAddsNewKeysAndKeepsExistingOnes(t *testing.T) {
 // Python is deliberately absent here: the skill's venv interpreter carries its
 // own packages, so an injected PYTHONPATH would only be able to shadow them.
 func TestApplySkillNodePathAppendsAfterTheCallersValue(t *testing.T) {
-	skillDir := sandbox.SkillsImageRoot + "/律师助手"
+	skillDir := "/opt/weknora/tenant/skills/律师助手"
 
 	env := map[string]string{nodePathEnvVar: "/already"}
 	applySkillNodePath(env, skillDir)

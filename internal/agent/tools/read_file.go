@@ -7,52 +7,35 @@ import (
 	"strings"
 
 	"github.com/Tencent/WeKnora/internal/agent/skills"
-	"github.com/Tencent/WeKnora/internal/sandbox"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/utils"
 )
 
-// ReadFileTool exposes one read operation over capability-scoped sources.
-// Skill resources use the manager's allowlist and bundle loader, never an
-// arbitrary host path. Workspace files retain the sandbox reader's guards.
+// ReadFileTool exposes read operations over skill-scoped resources.
 type ReadFileTool struct {
 	BaseTool
-	workspace *workspaceFileReader
-	skills    *skills.Manager
-	shell     bool
+	skills *skills.Manager
 }
 
 type ReadFileInput struct {
-	Path     string `json:"path" jsonschema:"File address: an available workspace path or skill://<name>/<relative-file>. Read a skill's SKILL.md before applying it."`
-	Offset   int    `json:"offset,omitempty" jsonschema:"1-based line number; omit for the first page. Use the returned next_offset to continue."`
+	Path     string `json:"path" jsonschema:"File address: skill://<name>/<relative-file>. Read a skill's SKILL.md before applying it."`
+	Offset   int    `json:"offset,omitempty" jsonschema:"1-based line number; omit for the first page."`
 	Limit    int    `json:"limit,omitempty" jsonschema:"Maximum lines to return; defaults to 2000."`
-	MaxBytes int64  `json:"max_bytes,omitempty" jsonschema:"Maximum returned text bytes, capped at 65536. The tool output budget also applies."`
+	MaxBytes int64  `json:"max_bytes,omitempty" jsonschema:"Maximum returned text bytes."`
 }
 
-func NewReadFileTool(source SandboxFileSource) *ReadFileTool {
-	t := &ReadFileTool{BaseTool: BaseTool{name: ToolReadFile, schema: utils.GenerateSchema[ReadFileInput]()}}
-	if source != nil {
-		t.workspace = &workspaceFileReader{source: source}
+func NewReadFileTool(manager *skills.Manager) *ReadFileTool {
+	t := &ReadFileTool{
+		BaseTool: BaseTool{name: ToolReadFile, schema: utils.GenerateSchema[ReadFileInput]()},
+		skills:   manager,
 	}
-	t.updateDescription()
+	t.description = "Skill resources: skill://<name>/SKILL.md loads skill instructions and file list; skill://<name>/<relative-file> reads a bundled resource."
 	return t
 }
 
-func (t *ReadFileTool) WithSkills(manager *skills.Manager, shell bool) *ReadFileTool {
-	t.skills, t.shell = manager, shell
-	t.updateDescription()
+func (t *ReadFileTool) WithSkills(manager *skills.Manager, _ bool) *ReadFileTool {
+	t.skills = manager
 	return t
-}
-
-func (t *ReadFileTool) updateDescription() {
-	var scopes []string
-	if t.workspace != nil {
-		scopes = append(scopes, "Workspace files: absolute paths under /workspace or relative paths from /workspace. Known paths can be read directly.")
-	}
-	if t.skills != nil && t.skills.IsEnabled() {
-		scopes = append(scopes, "Skill resources: skill://<name>/SKILL.md loads the allowed skill's instructions, file list and execution guidance; skill://<name>/<relative-file> reads a bundled resource. These are package resources, not shell paths or arbitrary host files.")
-	}
-	t.description = "Read text from the available file sources.\n" + strings.Join(scopes, "\n") + "\noffset is a 1-based line number; limit defaults to 2000 lines. max_bytes is capped at 65536; the tool output budget also applies. Continue at the returned next_offset when truncated. Binary content is suppressed."
 }
 
 func (t *ReadFileTool) Execute(ctx context.Context, args json.RawMessage) (*types.ToolResult, error) {
@@ -62,18 +45,12 @@ func (t *ReadFileTool) Execute(ctx context.Context, args json.RawMessage) (*type
 	}
 	input.Path = strings.TrimSpace(input.Path)
 	if input.Path == "" {
-		return &types.ToolResult{Success: false, Error: "path is required; use a known workspace path or a skill resource from the available skills list"}, nil
+		return &types.ToolResult{Success: false, Error: "path is required; use skill://<name>/<relative-file>"}, nil
 	}
 	if strings.HasPrefix(input.Path, "skill://") {
 		return t.readSkillResource(ctx, input), nil
 	}
-	if t.workspace == nil {
-		return &types.ToolResult{Success: false, Error: "workspace file access is unavailable; only listed skill resources can be read"}, nil
-	}
-	if _, ok := matchingInspectableRoot(sandbox.ResolveWorkspacePath(input.Path)); !ok {
-		return &types.ToolResult{Success: false, Error: "path is outside that scope: file access is limited to /workspace and listed skill:// resources; use the skill resource address from the available skills list to read its package"}, nil
-	}
-	return t.workspace.read(ctx, input)
+	return &types.ToolResult{Success: false, Error: "path is outside scope: file access is limited to listed skill:// resources"}, nil
 }
 
 func (t *ReadFileTool) readSkillResource(ctx context.Context, input ReadFileInput) *types.ToolResult {
@@ -85,8 +62,6 @@ func (t *ReadFileTool) readSkillResource(ctx context.Context, input ReadFileInpu
 	if !ok || name == "" || rel == "" {
 		return fail(fmt.Errorf("use skill://<name>/SKILL.md or skill://<name>/<relative-file>"))
 	}
-	// Reject traversal before normalization; resolving one skill must never
-	// authorize another skill or an absolute host path.
 	for _, segment := range strings.Split(rel, "/") {
 		if segment == ".." || segment == "." || segment == "" {
 			return fail(fmt.Errorf("skill resource must have a canonical relative file path without traversal"))
@@ -105,6 +80,7 @@ func (t *ReadFileTool) readSkillResource(ctx context.Context, input ReadFileInpu
 	if !listed {
 		return fail(fmt.Errorf("skill %q is not available to this agent", name))
 	}
+
 	var content string
 	if rel == skills.SkillFileName {
 		skill, err := t.skills.LoadSkill(ctx, name)
@@ -113,28 +89,13 @@ func (t *ReadFileTool) readSkillResource(ctx context.Context, input ReadFileInpu
 		}
 		var b strings.Builder
 		fmt.Fprintf(&b, "# %s\n\n%s\n\n", skill.Name, skill.Description)
-		// Keep execution guidance before potentially long instructions so the
-		// first page identifies the correct runtime even for large skills.
-		if t.shell {
-			dir, installed := t.skills.SandboxSkillDir(name)
-			if !installed {
-				dir = "a session directory prepared automatically from this skill package"
-			}
-			fmt.Fprintf(&b, "Execution: shell_exec(skill_name=%q, command=...). "+
-				"Use $WEKNORA_SKILL_DIR for bundled scripts (resources: %s); "+
-				"cwd defaults to /workspace. "+
-				"Host skill resources are staged into the session automatically "+
-				"(host virtualenvs and node_modules are not copied). "+
-				"Deliverables belong in /workspace/output.\n\n", name, dir)
-		} else {
-			b.WriteString("Execution is unavailable: this agent has no sandbox shell. The skill instructions can be read; configuring a shell-capable sandbox is required to run scripts.\n\n")
-		}
 		b.WriteString(skill.Instructions)
 		files, err := t.skills.ListSkillFiles(ctx, name)
-		if err != nil {
-			b.WriteString("\n\n[The bundled file list is unavailable; known resource paths may still be read.]\n")
-		} else if tree := formatSkillFileTree(files); tree != "" {
-			fmt.Fprintf(&b, "\n\n## Bundled files\nRead these relative paths under skill://%s/:\n\n%s", name, tree)
+		if err == nil && len(files) > 0 {
+			fmt.Fprintf(&b, "\n\n## Bundled files\nRead these relative paths under skill://%s/:\n", name)
+			for _, f := range files {
+				fmt.Fprintf(&b, "- %s\n", f)
+			}
 		}
 		content = b.String()
 	} else {
@@ -144,13 +105,14 @@ func (t *ReadFileTool) readSkillResource(ctx context.Context, input ReadFileInpu
 			return fail(err)
 		}
 	}
-	if int64(len(content)) > maxReadSandboxDownloadBytes {
-		return fail(fmt.Errorf("skill resource exceeds the %d-byte read limit; split the package resource into smaller files", maxReadSandboxDownloadBytes))
+
+	return &types.ToolResult{
+		Success: true,
+		Output:  content,
+		Data: map[string]interface{}{
+			"skill_name": name,
+			"file_path":  rel,
+			"path":       input.Path,
+		},
 	}
-	result := renderFilePage(ctx, input, []byte(content), resolveSessionID(ctx), input.Path, "skill://"+name)
-	if result.Data != nil {
-		result.Data["skill_name"] = name
-		result.Data["file_path"] = rel
-	}
-	return result
 }

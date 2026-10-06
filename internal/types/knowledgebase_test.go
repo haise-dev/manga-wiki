@@ -331,21 +331,21 @@ func TestDefaultParserEnginePrefersRegisteredEngineForFallbackTypes(t *testing.T
 	t.Cleanup(func() { SetPreferParserEngine(nil) })
 	SetPreferParserEngine(func(fileType string) string {
 		if fileType == "pptx" || fileType == "ppt" || fileType == "pdf" || fileType == "docx" {
-			return "anydoc"
+			return "mock_engine"
 		}
 		return ""
 	})
-	if got := DefaultParserEngine("pptx"); got != "anydoc" {
-		t.Fatalf("DefaultParserEngine(pptx) = %q, want anydoc", got)
+	if got := DefaultParserEngine("pptx"); got != "mock_engine" {
+		t.Fatalf("DefaultParserEngine(pptx) = %q, want mock_engine", got)
 	}
-	if got := DefaultParserEngine("ppt"); got != "anydoc" {
-		t.Fatalf("DefaultParserEngine(ppt) = %q, want anydoc", got)
+	if got := DefaultParserEngine("ppt"); got != "mock_engine" {
+		t.Fatalf("DefaultParserEngine(ppt) = %q, want mock_engine", got)
 	}
-	if got := DefaultParserEngine("pdf"); got != "anydoc" {
-		t.Fatalf("DefaultParserEngine(pdf) = %q, want anydoc", got)
+	if got := DefaultParserEngine("pdf"); got != "mock_engine" {
+		t.Fatalf("DefaultParserEngine(pdf) = %q, want mock_engine", got)
 	}
-	if got := DefaultParserEngine("docx"); got != "anydoc" {
-		t.Fatalf("DefaultParserEngine(docx) = %q, want anydoc", got)
+	if got := DefaultParserEngine("docx"); got != "mock_engine" {
+		t.Fatalf("DefaultParserEngine(docx) = %q, want mock_engine", got)
 	}
 	if got := DefaultParserEngine("txt"); got != "" {
 		t.Fatalf("DefaultParserEngine(txt) = %q, want empty", got)

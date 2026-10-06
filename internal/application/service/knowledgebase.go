@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/Tencent/WeKnora/internal/application/service/retriever"
-	"github.com/Tencent/WeKnora/internal/datasource"
 	apperrors "github.com/Tencent/WeKnora/internal/errors"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/storageallowlist"
@@ -44,9 +43,6 @@ type knowledgeBaseService struct {
 	asynqClient     interfaces.TaskEnqueuer
 	taskInspector   interfaces.TaskInspector
 	taskPendingRepo interfaces.TaskPendingOpsRepository
-	dsRepo          interfaces.DataSourceRepository
-	syncLogRepo     interfaces.SyncLogRepository
-	dsScheduler     *datasource.Scheduler
 	audit           interfaces.AuditLogService
 	resourceCatalog interfaces.ResourceCatalog
 }
@@ -67,9 +63,6 @@ func NewKnowledgeBaseService(repo interfaces.KnowledgeBaseRepository,
 	asynqClient interfaces.TaskEnqueuer,
 	taskInspector interfaces.TaskInspector,
 	taskPendingRepo interfaces.TaskPendingOpsRepository,
-	dsRepo interfaces.DataSourceRepository,
-	syncLogRepo interfaces.SyncLogRepository,
-	dsScheduler *datasource.Scheduler,
 	audit interfaces.AuditLogService,
 	resourceCatalog interfaces.ResourceCatalog,
 ) interfaces.KnowledgeBaseService {
@@ -89,9 +82,6 @@ func NewKnowledgeBaseService(repo interfaces.KnowledgeBaseRepository,
 		asynqClient:     asynqClient,
 		taskInspector:   taskInspector,
 		taskPendingRepo: taskPendingRepo,
-		dsRepo:          dsRepo,
-		syncLogRepo:     syncLogRepo,
-		dsScheduler:     dsScheduler,
 		audit:           audit,
 		resourceCatalog: resourceCatalog,
 	}
@@ -1018,36 +1008,7 @@ func (s *knowledgeBaseService) cleanupTasksForKnowledgeBase(
 // every data source attached to the KB. Errors on individual sources are logged
 // but do not fail KB deletion — the KB record is already soft-deleted.
 func (s *knowledgeBaseService) deleteDataSourcesForKnowledgeBase(ctx context.Context, kbID string) []string {
-	if s.dsRepo == nil {
-		return nil
-	}
-
-	dataSources, err := s.dsRepo.FindByKnowledgeBase(ctx, kbID)
-	if err != nil {
-		logger.Warnf(ctx, "Failed to list data sources for deleted KB %s: %v", kbID, err)
-		return nil
-	}
-	dataSourceIDs := make([]string, 0, len(dataSources))
-	for _, ds := range dataSources {
-		if ds == nil || ds.ID == "" {
-			continue
-		}
-		dataSourceIDs = append(dataSourceIDs, ds.ID)
-		if err := s.dsRepo.Delete(ctx, ds.ID); err != nil {
-			logger.Warnf(ctx, "Failed to delete data source %s for KB %s: %v", ds.ID, kbID, err)
-			continue
-		}
-		if s.dsScheduler != nil {
-			s.dsScheduler.Remove(ds.ID)
-		}
-		if s.syncLogRepo != nil {
-			if err := s.syncLogRepo.CancelPendingByDataSource(ctx, ds.ID); err != nil {
-				logger.Warnf(ctx, "Failed to cancel pending sync logs for ds=%s (kb=%s): %v", ds.ID, kbID, err)
-			}
-		}
-		logger.Infof(ctx, "Data source deleted with knowledge base: ds=%s kb=%s", ds.ID, kbID)
-	}
-	return dataSourceIDs
+	return nil
 }
 
 // SetEmbeddingModel sets the embedding model for a knowledge base

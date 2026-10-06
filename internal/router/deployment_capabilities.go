@@ -2,14 +2,13 @@ package router
 
 import (
 	"github.com/Tencent/WeKnora/internal/handler"
-	"github.com/Tencent/WeKnora/internal/sandbox"
 )
 
 func deploymentCapabilitiesFromRouter(params RouterParams) handler.DeploymentCapabilitiesData {
 	return handler.BuildDeploymentCapabilities(handler.Edition, handler.DeploymentFeatureAvailability{
 		Organizations: params.OrganizationHandler != nil,
 		Agents:        params.CustomAgentHandler != nil,
-		IM:            params.IMHandler != nil,
+		IM:            false,
 		// Match RegisterEmbedChannelRoutes: management routes depend on handler only.
 		Embed: params.EmbedChannelHandler != nil,
 		API:   params.TenantHandler != nil && params.TenantAPIKeyService != nil,
@@ -21,7 +20,7 @@ func deploymentCapabilitiesFromRouter(params RouterParams) handler.DeploymentCap
 			params.WebSearchCredentialsHandler != nil,
 		VectorStore:   params.VectorStoreHandler != nil,
 		Storage:       params.StorageBackendHandler != nil,
-		Sandbox:       params.SandboxConfigHandler != nil,
-		SandboxDocker: sandbox.DockerBackendEnabled(),
+		Sandbox:       false,
+		SandboxDocker: false,
 	})
 }

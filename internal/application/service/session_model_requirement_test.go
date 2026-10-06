@@ -2,12 +2,26 @@ package service
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/Tencent/WeKnora/internal/types"
+	"github.com/Tencent/WeKnora/internal/types/interfaces"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type fakeAgentKnowledgeBaseService struct {
+	interfaces.KnowledgeBaseService
+	kb *types.KnowledgeBase
+}
+
+func (s *fakeAgentKnowledgeBaseService) GetKnowledgeBaseByID(context.Context, string) (*types.KnowledgeBase, error) {
+	if s.kb == nil {
+		return nil, errors.New("knowledge base not found")
+	}
+	return s.kb, nil
+}
 
 func TestResolveChatModelIDRequiresConfiguredAgentModel(t *testing.T) {
 	svc := &sessionService{

@@ -6,8 +6,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-
-	"github.com/Tencent/WeKnora/internal/sandbox"
 )
 
 // artifactOutputEnvVar is the name of the environment variable that WeKnora
@@ -84,23 +82,14 @@ const defaultArtifactOutputDir = "/workspace/output"
 // is normalised (no trailing slash) so it can be joined safely.
 func ArtifactOutputDir() string {
 	if v := strings.TrimSpace(os.Getenv(artifactOutputEnvVar)); v != "" {
-		if clean, ok := sandbox.ValidatedSessionOutputDir(v); ok {
-			return clean
-		}
+		return v
 	}
 	return defaultArtifactOutputDir
 }
 
-// Manager manages skills lifecycle including discovery, reading, and shell environment preparation
-// It coordinates skill sources and session resource staging; shell_exec owns execution
+// Manager manages skills lifecycle including discovery and reading
 type Manager struct {
-	loader     *Loader
-	sandboxMgr sandbox.Manager
-
-	// tenantSource holds the skills installed into this run's sandbox image.
-	// When set it is the only source the model is told about: a host skill
-	// directory is not what execution would find inside the sandbox.
-	tenantSource SkillSource
+	loader *Loader
 
 	// Configuration
 	skillDirs     []string
@@ -122,7 +111,7 @@ type ManagerConfig struct {
 }
 
 // NewManager creates a new skill manager with the given configuration
-func NewManager(config *ManagerConfig, sandboxMgr sandbox.Manager) *Manager {
+func NewManager(config *ManagerConfig) *Manager {
 	if config == nil {
 		config = &ManagerConfig{
 			Enabled: false,
@@ -131,7 +120,6 @@ func NewManager(config *ManagerConfig, sandboxMgr sandbox.Manager) *Manager {
 
 	return &Manager{
 		loader:        NewLoader(config.SkillDirs),
-		sandboxMgr:    sandboxMgr,
 		skillDirs:     config.SkillDirs,
 		allowedSkills: config.AllowedSkills,
 		enabled:       config.Enabled,
@@ -144,31 +132,11 @@ func (m *Manager) IsEnabled() bool {
 }
 
 // WithTenantSource attaches the skills an administrator installed into the
-// sandbox config this run booted from. It is part of construction - callers
-// must invoke it before Initialize, i.e. before the engine can reach the
-// manager - so it takes no lock.
-func (m *Manager) WithTenantSource(source SkillSource) *Manager {
-	m.tenantSource = source
-	return m
-}
-
-// resolveSource decides which source owns one skill name. An installed image
-// is the only copy the sandbox can run: falling back to a host skill directory
-// would advertise files that are not in the image.
 func (m *Manager) resolveSource(skillName string) SkillSource {
-	if m.tenantSource != nil {
-		return m.tenantSource
-	}
 	return m.loader
 }
 
-// discoverAllSkills returns the set the model is told about. When skills are
-// installed into the sandbox image, that image is the source of truth; a host
-// skill directory is not what execution would find inside the sandbox.
 func (m *Manager) discoverAllSkills() ([]*SkillMetadata, error) {
-	if m.tenantSource != nil {
-		return m.tenantSource.DiscoverSkills()
-	}
 	return m.loader.Reload()
 }
 
@@ -298,30 +266,7 @@ func (m *Manager) ListSkillFiles(ctx context.Context, skillName string) ([]strin
 // sandbox shell command can reach — telling the model about it would be worse
 // than saying nothing.
 func (m *Manager) SandboxSkillDir(skillName string) (string, bool) {
-	if m == nil || !m.enabled || !m.isSkillAllowed(skillName) {
-		return "", false
-	}
-	image, ok := m.resolveSource(skillName).(imageSkillSource)
-	if !ok {
-		return "", false
-	}
-	dir, err := image.GetSkillBasePath(skillName)
-	if err != nil {
-		return "", false
-	}
-	dir = strings.TrimSpace(dir)
-	return dir, dir != ""
-}
-
-// sessionFileStoreFromManager returns the sandbox manager's effective
-// session filesystem capability, or nil when the backend cannot expose one.
-// Isolated in a helper so callers stay free of provider-specific branches.
-func sessionFileStoreFromManager(mgr sandbox.Manager) sandbox.SessionFileStore {
-	provider, ok := mgr.(sandbox.SessionCapabilityProvider)
-	if !ok || provider == nil {
-		return nil
-	}
-	return provider.SessionFileStore()
+	return "", false
 }
 
 // GetSkillInfo returns detailed information about a skill
@@ -387,8 +332,5 @@ func (m *Manager) Reload(ctx context.Context) error {
 
 // Cleanup releases resources
 func (m *Manager) Cleanup(ctx context.Context) error {
-	if m.sandboxMgr != nil {
-		return m.sandboxMgr.Cleanup(ctx)
-	}
 	return nil
 }

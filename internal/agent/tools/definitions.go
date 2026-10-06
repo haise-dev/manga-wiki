@@ -68,6 +68,12 @@ const (
 	ToolWikiFlagIssue     = "wiki_flag_issue"
 	ToolWikiReadIssue     = "wiki_read_issue"
 	ToolWikiUpdateIssue   = "wiki_update_issue"
+
+	// Manga domain tools
+	ToolMangaLookupCharacter  = "lookup_character"
+	ToolMangaGetTimeline      = "get_timeline"
+	ToolMangaGetRelationships = "get_character_relationships"
+	ToolMangaSearchEvidence   = "search_manga_evidence"
 )
 
 // AvailableTool defines a simple tool metadata used by settings APIs.
@@ -106,6 +112,10 @@ func AvailableToolDefinitions() []AvailableTool {
 		{Name: ToolWikiDeletePage, Label: "删除Wiki", Description: "删除Wiki页面并自动清理关联死链"},
 		{Name: ToolWikiReadIssue, Label: "查看Wiki问题", Description: "查看特定的Wiki页面问题详情"},
 		{Name: ToolWikiUpdateIssue, Label: "更新Wiki问题状态", Description: "更新特定的Wiki页面问题状态"},
+		{Name: ToolMangaLookupCharacter, Label: "Manga Character Lookup", Description: "Lookup character identity, aliases, and status with spoiler boundary"},
+		{Name: ToolMangaGetTimeline, Label: "Manga Timeline", Description: "Chronological event timeline for manga series and characters"},
+		{Name: ToolMangaGetRelationships, Label: "Manga Relationships", Description: "Inspect character relationships valid at specific story points"},
+		{Name: ToolMangaSearchEvidence, Label: "Manga Evidence Search", Description: "Search evidence claims with canon tier authority and spoiler filters"},
 	}
 }
 
@@ -116,6 +126,10 @@ func DefaultAllowedTools() []string {
 		ToolGrepChunks,
 		ToolListKnowledgeChunks,
 		ToolGetDocumentInfo,
+		ToolMangaLookupCharacter,
+		ToolMangaGetTimeline,
+		ToolMangaGetRelationships,
+		ToolMangaSearchEvidence,
 		// Looking up what this user asked before is only ever a read of their
 		// own history, and it is what lets "上次你给我的那个配置" resolve at all
 		// without stuffing every past conversation into the context window.

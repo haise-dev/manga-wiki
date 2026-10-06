@@ -105,12 +105,10 @@ const contextSafetyTokens = 4096
 // sandbox (write_sandbox_file / edit_sandbox_file) is 24576.
 func (e *AgentEngine) getCompletionTokenBudget() int {
 	configured := 0
-	sandboxID := ""
 	if e.config != nil {
 		configured = e.config.MaxCompletionTokens
-		sandboxID = e.config.SandboxConfigID
 	}
-	return types.AgentRoundMaxCompletionTokensFor(configured, sandboxID)
+	return types.AgentRoundMaxCompletionTokensFor(configured, "")
 }
 
 // contextReserveTokens is the part of the window that history may not occupy,

@@ -8,9 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/Tencent/WeKnora/internal/agent/skills"
 	agenttools "github.com/Tencent/WeKnora/internal/agent/tools"
-	"github.com/Tencent/WeKnora/internal/application/service"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/logger"
 	"github.com/Tencent/WeKnora/internal/types"
@@ -33,10 +31,6 @@ type AgentStreamHandler struct {
 
 	eventBus *event.EventBus
 
-	// artifactCollector drains skill-generated files from the session
-	// sandbox after the agent completes. Nil when the sandbox backend
-	// doesn't support artifact collection or WeKnora was built without it.
-	artifactCollector *service.ArtifactCollector
 
 	// State tracking
 	knowledgeRefs   []*types.SearchResult
@@ -89,7 +83,6 @@ func NewAgentStreamHandler(
 	assistantMessage *types.Message,
 	streamManager interfaces.StreamManager,
 	eventBus *event.EventBus,
-	artifactCollector *service.ArtifactCollector,
 ) *AgentStreamHandler {
 	return &AgentStreamHandler{
 		ctx:                ctx,
@@ -101,7 +94,6 @@ func NewAgentStreamHandler(
 		assistantMessage:   assistantMessage,
 		streamManager:      streamManager,
 		eventBus:           eventBus,
-		artifactCollector:  artifactCollector,
 		knowledgeRefs:      make([]*types.SearchResult, 0),
 		eventStartTimes:    make(map[string]time.Time),
 	}
@@ -206,7 +198,7 @@ func (h *AgentStreamHandler) handleToolCall(ctx context.Context, evt event.Event
 
 	metadata := map[string]interface{}{
 		"tool_name":    data.ToolName,
-		"arguments":    agenttools.SanitizeSandboxFileCallArgs(data.ToolName, data.Arguments),
+		"arguments":    data.Arguments,
 		"tool_call_id": data.ToolCallID,
 	}
 
@@ -688,46 +680,6 @@ func (h *AgentStreamHandler) handleComplete(ctx context.Context, evt event.Event
 			h.assistantMessage.Usage = usage
 		}
 
-		// Drain skill-generated files from the sandbox into persistent
-		// storage. Best-effort: any failure is logged and the turn is
-		// persisted without artifacts. Collect is a no-op when either the
-		// collector wasn't wired in, no sandbox is bound, or no files were
-		// produced — those cases must not disturb the completion path.
-		var previous types.MessageArtifacts
-		if h.artifactCollector != nil {
-			collectCtx := context.WithoutCancel(h.ctx)
-			artifacts, err := h.artifactCollector.CollectWithNotify(
-				collectCtx,
-				h.sessionID,
-				h.assistantMessageID,
-				h.tenantID,
-				skills.ArtifactOutputDir(),
-				h.emitArtifactsPending,
-			)
-			if err != nil {
-				logger.GetLogger(h.ctx).Warnf(
-					"artifact collect failed session=%s message=%s: %v",
-					h.sessionID, h.assistantMessageID, err,
-				)
-			} else if len(artifacts) > 0 {
-				h.assistantMessage.Artifacts = artifacts
-				// The answer text names generated files the way the model saw
-				// them in the sandbox. Bind those names to artifact indices now
-				// that the index space is final, so a reloaded conversation
-				// renders them instead of showing a broken link.
-				h.assistantMessage.Content = rewriteArtifactReferences(
-					h.assistantMessage.Content, artifacts,
-				)
-				logger.GetLogger(h.ctx).Infof(
-					"artifact collect attached %d file(s) to message=%s session=%s",
-					len(artifacts), h.assistantMessageID, h.sessionID,
-				)
-			}
-			previous = h.artifactCollector.ReferencedHistory(collectCtx, h.sessionID,
-				h.assistantMessageID, h.assistantMessage.Content)
-		}
-		h.assistantMessage.Content = types.ClarifyArtifactVersions(h.assistantMessage.Content,
-			h.assistantMessage.Artifacts, previous, types.LanguageFromContextOrDefault(h.ctx))
 	}
 
 	// Fallback: if no answer events were streamed but we have a final answer,

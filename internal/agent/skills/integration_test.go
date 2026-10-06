@@ -106,7 +106,7 @@ func TestManagerWithExampleSkills(t *testing.T) {
 		Enabled:       true,
 	}
 
-	manager := NewManager(config, nil)
+	manager := NewManager(config)
 
 	// Initialize
 	ctx := context.Background()

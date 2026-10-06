@@ -262,46 +262,10 @@ func formatToolGuidance(names []string) string {
 	b.WriteString("For long-running operations, prefer a documented asynchronous mode when available. Use the returned task ID to wait or poll at the recommended interval and retrieve the completed result; after a timeout, check the existing task before resubmitting.\n")
 	b.WriteString("On failure, use the reported cause to correct the input or environment. Retry only after something relevant changes. Permission, policy, or missing-configuration failures are not fixed by switching tools; report the concrete blocker if it cannot be corrected within this session.\n")
 	if has("read_file") {
-		b.WriteString("Use read_file for workspace files and listed skill:// resources. In older instructions, translate read_skill(skill_name, file_path) to read_file(path=skill://<name>/<file_path or SKILL.md>) and read_sandbox_file to read_file.\n")
-	}
-	if has("shell_exec") || has("write_sandbox_file") {
-		b.WriteString("Session workspace: /workspace. Preserve uploaded originals in /workspace/input. " +
-			"/workspace/output is the only directory collected for download, " +
-			"so it takes finished deliverables only; " +
-			"keep drafts and intermediate files in another directory under /workspace. " +
-			"Commands start from their specified working directory on every call. " +
-			"Files and installed packages persist within the session.\n")
-		b.WriteString(sandboxArtifactReferenceGuidance())
-	}
-	if has("shell_exec") && has("read_file") {
-		b.WriteString("For listed skills, run bundled scripts and your own scripts with " +
-			"shell_exec(skill_name=..., command=...). This selects an installed skill's runtime " +
-			"or stages host skill resources, and applies scoped credentials; " +
-			"use $WEKNORA_SKILL_DIR for bundled files.\n")
-		b.WriteString("In older instructions, translate execute_skill_script(skill_name, script_path, ...) to shell_exec(skill_name=..., command=...).\n")
+		b.WriteString("Use read_file for listed skill:// resources.\n")
 	}
 
 	return b.String()
-}
-
-// sandboxArtifactReferenceGuidance tells the model how to point at a file it
-// generated in the sandbox from its final answer.
-//
-// Without this, models improvise a Markdown image with the bare file name
-// (`![评分](市场画像评分.html)`), which the browser cannot resolve — the answer
-// renders a broken image icon. The `sandbox:` prefix makes the intent explicit
-// so the server can bind the name to the artifact index it hands the client.
-func sandboxArtifactReferenceGuidance() string {
-	var builder strings.Builder
-	builder.WriteString("  - Include key generated deliverables in your final answer as ")
-	builder.WriteString("`![description](sandbox:<file name>)` using the exact file name and no directory path\n")
-	builder.WriteString("    - Images render inline; charts, tables, and documents ")
-	builder.WriteString("render as a card the user clicks to preview\n")
-	builder.WriteString("    - Never reference a sandbox path (`/workspace/output/...`) ")
-	builder.WriteString("or a bare file name directly — neither resolves in the browser\n")
-	builder.WriteString("    - Prefer output file names without spaces or parentheses; ")
-	builder.WriteString("they keep the reference unambiguous\n")
-	return builder.String()
 }
 
 // renderPromptPlaceholdersWithStatus renders placeholders including web search status

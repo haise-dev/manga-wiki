@@ -110,6 +110,52 @@
         </div>
       </template>
     </t-popup>
+
+    <!-- Manga Spoiler Shield Control -->
+    <t-popup
+      v-if="!titleEditing"
+      placement="bottom-left"
+      trigger="click"
+      destroy-on-close
+    >
+      <button
+        type="button"
+        class="chat-header__shield-btn"
+        :class="{ 'is-active': maxChapter > 0 }"
+        :title="'Spoiler Shield: limit answers & references to chapter boundary'"
+      >
+        <t-icon name="secured" size="14px" />
+        <span class="chat-header__shield-text">{{ maxChapter > 0 ? `Ch. ${maxChapter}` : 'Shield' }}</span>
+      </button>
+      <template #content>
+        <div class="spoiler-shield-popover" @click.stop>
+          <div class="spoiler-shield-header">
+            <span class="spoiler-shield-title">Manga Spoiler Shield</span>
+            <t-tag v-if="maxChapter > 0" theme="primary" variant="light" size="small">Ch. {{ maxChapter }}</t-tag>
+          </div>
+          <p class="spoiler-shield-desc">
+            Restricts retrieval, evidence claims, and agent reasoning up to the selected chapter.
+          </p>
+          <div class="spoiler-shield-input-row">
+            <label class="spoiler-shield-label">Max Chapter:</label>
+            <t-input-number
+              v-model="maxChapterDraft"
+              :min="0"
+              :max="3000"
+              :step="1"
+              theme="column"
+              placeholder="0 = Off"
+              @change="onMaxChapterChange"
+            />
+          </div>
+          <div v-if="maxChapter > 0" class="spoiler-shield-actions">
+            <t-button size="small" variant="text" theme="danger" @click="clearSpoilerShield">
+              Turn Off
+            </t-button>
+          </div>
+        </div>
+      </template>
+    </t-popup>
   </header>
 </template>
 
@@ -127,6 +173,7 @@ import {
 } from './sessionMutations'
 import { normalizeSessionTitleDraft, SESSION_TITLE_MAX_LENGTH } from './sessionTitleEdit'
 import { buildSessionMarkdown, collectAllSessionMessages } from '@/utils/sessionMarkdown'
+import { useSettingsStore } from '@/stores/settings'
 
 interface ChatHeaderSession {
   id: string
@@ -144,6 +191,21 @@ const props = defineProps<{
 }>()
 
 const { t } = useI18n()
+const settingsStore = useSettingsStore()
+const maxChapter = computed(() => settingsStore.mangaMaxChapter)
+const maxChapterDraft = ref(settingsStore.mangaMaxChapter)
+
+function onMaxChapterChange(val: any): void {
+  const num = typeof val === 'number' ? val : parseInt(String(val), 10) || 0
+  maxChapterDraft.value = num
+  settingsStore.setMangaMaxChapter(num)
+}
+
+function clearSpoilerShield(): void {
+  maxChapterDraft.value = 0
+  settingsStore.setMangaMaxChapter(0)
+}
+
 const busyAction = ref('')
 const menuVisible = ref(false)
 const menuMode = ref<MenuMode>('menu')
@@ -484,6 +546,82 @@ function handleMenuClick(data: { value: string }): void {
   &.is-loading {
     cursor: wait;
   }
+}
+
+.chat-header__shield-btn {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--td-component-stroke);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--td-text-color-secondary);
+  background: var(--td-bg-color-secondarycontainer);
+  cursor: pointer;
+  transition: all 0.15s ease;
+
+  &:hover {
+    color: var(--td-brand-color);
+    border-color: var(--td-brand-color);
+  }
+
+  &.is-active {
+    color: var(--td-brand-color);
+    background: rgba(0, 82, 217, 0.1);
+    border-color: var(--td-brand-color);
+    font-weight: 600;
+  }
+}
+
+.chat-header__shield-text {
+  white-space: nowrap;
+}
+
+.spoiler-shield-popover {
+  padding: 12px;
+  width: 220px;
+  box-sizing: border-box;
+}
+
+.spoiler-shield-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+
+.spoiler-shield-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--td-text-color-primary);
+}
+
+.spoiler-shield-desc {
+  font-size: 11px;
+  color: var(--td-text-color-secondary);
+  margin: 0 0 8px 0;
+  line-height: 1.35;
+}
+
+.spoiler-shield-input-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  .spoiler-shield-label {
+    font-size: 12px;
+    color: var(--td-text-color-primary);
+  }
+}
+
+.spoiler-shield-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .chat-header__menu-loading {

@@ -6,7 +6,6 @@ package container
 import (
 	"context"
 	"database/sql"
-	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -54,28 +53,9 @@ import (
 	"github.com/Tencent/WeKnora/internal/common"
 	"github.com/Tencent/WeKnora/internal/config"
 	"github.com/Tencent/WeKnora/internal/database"
-	"github.com/Tencent/WeKnora/internal/datasource"
-	"github.com/Tencent/WeKnora/internal/datasource/connector/feishu/core"
-	"github.com/Tencent/WeKnora/internal/datasource/connector/feishu/drive"
-	"github.com/Tencent/WeKnora/internal/datasource/connector/feishu/wiki"
-	gitlabConnector "github.com/Tencent/WeKnora/internal/datasource/connector/gitlab"
-	imaConnector "github.com/Tencent/WeKnora/internal/datasource/connector/ima"
-	notionConnector "github.com/Tencent/WeKnora/internal/datasource/connector/notion"
-	rssConnector "github.com/Tencent/WeKnora/internal/datasource/connector/rss"
-	yuqueConnector "github.com/Tencent/WeKnora/internal/datasource/connector/yuque"
 	"github.com/Tencent/WeKnora/internal/event"
 	"github.com/Tencent/WeKnora/internal/handler"
 	"github.com/Tencent/WeKnora/internal/handler/session"
-	imPkg "github.com/Tencent/WeKnora/internal/im"
-	"github.com/Tencent/WeKnora/internal/im/dingtalk"
-	"github.com/Tencent/WeKnora/internal/im/feishu"
-	"github.com/Tencent/WeKnora/internal/im/mattermost"
-	"github.com/Tencent/WeKnora/internal/im/qqbot"
-	"github.com/Tencent/WeKnora/internal/im/slack"
-	"github.com/Tencent/WeKnora/internal/im/telegram"
-	"github.com/Tencent/WeKnora/internal/im/wechat"
-	"github.com/Tencent/WeKnora/internal/im/wecom"
-	"github.com/Tencent/WeKnora/internal/im/yunzhijia"
 	"github.com/Tencent/WeKnora/internal/infrastructure/docparser"
 	infra_web_search "github.com/Tencent/WeKnora/internal/infrastructure/web_search"
 	"github.com/Tencent/WeKnora/internal/logger"
@@ -164,8 +144,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(repository.NewMCPServiceRepository))
 	must(container.Provide(repository.NewMCPToolApprovalRepository))
 	must(container.Provide(repository.NewMCPOAuthRepository))
-	must(container.Provide(repository.NewTenantSandboxConfigRepository))
-	must(container.Provide(repository.NewTenantSkillRepository))
 	must(container.Provide(repository.NewCustomAgentRepository))
 	must(container.Provide(repository.NewOrganizationRepository))
 	must(container.Provide(repository.NewKBShareRepository))
@@ -174,9 +152,8 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(repository.NewTenantDisabledSharedAgentRepository))
 	must(container.Provide(repository.NewUserResourceFavoriteRepository))
 	must(container.Provide(service.NewWebSearchStateService))
-	must(container.Provide(repository.NewDataSourceRepository))
-	must(container.Provide(repository.NewSyncLogRepository))
 	must(container.Provide(repository.NewWikiPageRepository))
+	must(container.Provide(repository.NewMangaRepository))
 	must(container.Provide(repository.NewMemoryRepository))
 	must(container.Provide(repository.NewTaskPendingOpsRepository))
 	must(container.Provide(repository.NewTaskDeadLetterRepository))
@@ -186,15 +163,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(mcp.NewMCPManager))
 	must(container.Provide(mcp.NewOAuthManager))
 
-	// Sandbox manager fallback is disabled; executable backends are resolved
-	// from named workspace configurations.
-	logger.Debugf(ctx, "[Container] Registering sandbox manager...")
-	must(container.Provide(newSandboxManager))
-	// Per-tenant sandbox backends: the resolver builds a manager per request
-	// from the tenant's own configuration, falling back to the singleton above
-	// for tenants that configured nothing.
-	must(container.Provide(service.NewTenantSandboxConfigLoader))
-	must(container.Provide(newTenantSandboxResolver))
 
 	// Business service layer
 	logger.Debugf(ctx, "[Container] Registering business services...")
@@ -218,17 +186,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(service.NewEvaluationService))
 	must(container.Provide(service.NewUserService))
 	must(container.Provide(service.NewSystemSettingService))
-	must(container.Provide(func(
-		repo repository.TenantSandboxConfigRepository,
-		agents interfaces.CustomAgentRepository,
-		skills repository.TenantSkillRepository,
-		files interfaces.StorageBackendResolver,
-	) *service.TenantSandboxConfigService {
-		return service.NewTenantSandboxConfigService(repo, agents, buildGlobalSandboxConfig(), skills, files)
-	}))
-	must(container.Provide(func(s *service.TenantSandboxConfigService) service.WorkspaceSandboxPolicy {
-		return s
-	}))
 	must(container.Provide(service.NewWeKnoraCloudService))
 
 	// Extract services - register individual extracters with names
@@ -283,7 +240,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	// SessionService is passed as parameter to CreateAgentEngine method when creating AgentService
 	logger.Debugf(ctx, "[Container] Registering event bus and agent service...")
 	must(container.Provide(event.NewEventBus))
-	must(container.Provide(service.NewSessionSandboxPinner))
 	must(container.Provide(func(cfg *config.Config, s interfaces.MCPToolApprovalService, rdb *redis.Client) *approval.Gate {
 		return approval.NewGate(cfg, &approval.Adapter{Svc: s}, rdb)
 	}))
@@ -298,18 +254,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 
 	logger.Debugf(ctx, "[Container] Registering session service...")
 	must(container.Provide(service.NewSessionService))
-	must(container.Provide(service.NewTenantSkillService))
-	// The member-facing half of env vars is its own service because its
-	// authority is different in kind: it derives the identity from the context
-	// and touches only that identity's rows.
-	must(container.Provide(service.NewUserEnvService))
-
-	// ArtifactCollector drains skill-generated files from the sandbox on
-	// each agent turn (see spec at
-	// docs/superpowers/specs/2026-07-10-skill-artifact-download-design.md).
-	// The factory returns nil when the sandbox backend does not support
-	// per-session file inspection; downstream code guards on nil.
-	must(container.Provide(service.NewArtifactCollectorFromSandboxManager))
 
 	logger.Debugf(ctx, "[Container] Registering task enqueuer...")
 	redisAvailable := os.Getenv("REDIS_ADDR") != ""
@@ -350,13 +294,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	// Chat pipeline components for processing chat requests
 	logger.Debugf(ctx, "[Container] Registering chat pipeline plugins...")
 
-	// Data source sync framework
-	logger.Debugf(ctx, "[Container] Registering data source sync framework...")
-	must(container.Provide(initConnectorRegistry))
-	must(container.Provide(datasource.NewScheduler))
-	must(container.Provide(service.NewDataSourceService))
-	must(container.Invoke(startDataSourceScheduler))
-	logger.Debugf(ctx, "[Container] Data source sync framework registered")
 	must(container.Invoke(startAuditLogRetention))
 	logger.Debugf(ctx, "[Container] Audit log retention runner registered")
 	must(container.Provide(service.NewHousekeepingService))
@@ -382,12 +319,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Invoke(chatpipeline.NewPluginMemoryAffinity))
 	logger.Debugf(ctx, "[Container] Chat pipeline plugins registered")
 
-	// TenantSkillService is provided next to SessionService (handlers need
-	// it), but Invoke constructs the whole chain. SessionService needs
-	// *chatpipeline.EventManager, which only exists after the pipeline
-	// block above — starting the reaper any earlier panics.
-	must(container.Invoke(startTenantSkillReaper))
-	logger.Debugf(ctx, "[Container] Tenant skill reaper registered")
 
 	// HTTP handlers layer
 	logger.Debugf(ctx, "[Container] Registering HTTP handlers...")
@@ -404,13 +335,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewMessageHandler))
 	must(container.Provide(handler.NewMessageSuggestionHandler))
 	must(container.Provide(handler.NewModelHandler))
-	must(container.Provide(handler.NewSandboxConfigHandler))
-	must(container.Provide(func(
-		s *service.TenantSkillService, streams interfaces.StreamManager,
-	) *handler.SandboxSkillHandler {
-		return handler.NewSandboxSkillHandler(s, streams)
-	}))
-	must(container.Provide(handler.NewMeEnvVarHandler))
 	must(container.Provide(handler.NewEvaluationHandler))
 	must(container.Provide(handler.NewInitializationHandler))
 	must(container.Provide(handler.NewAuthHandler))
@@ -420,28 +344,17 @@ func BuildContainer(container *dig.Container) *dig.Container {
 	must(container.Provide(handler.NewMCPOAuthHandler))
 	must(container.Provide(handler.NewModelCredentialsHandler))
 	must(container.Provide(handler.NewWebSearchProviderCredentialsHandler))
-	must(container.Provide(handler.NewDataSourceCredentialsHandler))
 	must(container.Provide(handler.NewWebSearchHandler))
 	must(container.Provide(handler.NewWebSearchProviderHandler))
 	must(container.Provide(handler.NewVectorStoreHandler))
 	must(container.Provide(handler.NewStorageBackendHandler))
 	must(container.Provide(handler.NewCustomAgentHandler))
 	must(container.Provide(handler.NewUserResourceFavoriteHandler))
-	must(container.Provide(func(s *service.TenantSkillService) *handler.SkillHandler {
-		return handler.NewSkillHandler(s, s)
-	}))
 	must(container.Provide(handler.NewOrganizationHandler))
 	must(container.Provide(handler.NewMemoryHandler))
 
-	// Data source handler
-	must(container.Provide(handler.NewDataSourceHandler))
 	// Wiki page handler
 	must(container.Provide(handler.NewWikiPageHandler))
-	// IM integration
-	logger.Debugf(ctx, "[Container] Registering IM integration...")
-	must(container.Provide(imPkg.NewService))
-	must(container.Invoke(registerIMService))
-	must(container.Provide(handler.NewIMHandler))
 	must(container.Provide(handler.NewEmbedChannelHandler))
 	must(container.Provide(handler.NewWeKnoraCloudHandler))
 	logger.Debugf(ctx, "[Container] HTTP handlers registered")
@@ -1629,94 +1542,6 @@ func registerWebSearchProviders(registry *infra_web_search.Registry) {
 	registry.Register("metaso", infra_web_search.NewMetasoProvider)
 }
 
-// registerIMService registers adapter factories, loads enabled channels, and
-// wires the process-lifetime shutdown hook. Each platform's factory lives in
-// its own subpackage to keep this file focused on wiring.
-func registerIMService(imService *imPkg.Service, cleaner interfaces.ResourceCleaner) {
-	imService.RegisterAdapterFactory("wecom", wecom.NewFactory())
-	imService.RegisterAdapterFactory("feishu", feishu.NewFactory(feishu.RegionFeishu))
-	// Lark is Feishu's international cloud: same adapter, different host/tenant.
-	imService.RegisterAdapterFactory("lark", feishu.NewFactory(feishu.RegionLark))
-	imService.RegisterAdapterFactory("slack", slack.NewFactory())
-	imService.RegisterAdapterFactory("telegram", telegram.NewFactory())
-	imService.RegisterAdapterFactory("dingtalk", dingtalk.NewFactory())
-	imService.RegisterAdapterFactory("mattermost", mattermost.NewFactory())
-	imService.RegisterAdapterFactory("wechat", wechat.NewFactory())
-	imService.RegisterAdapterFactory("qqbot", qqbot.NewFactory())
-	imService.RegisterAdapterFactory("yunzhijia", yunzhijia.NewFactory())
-
-	// Load and start all enabled channels from database
-	if err := imService.LoadAndStartChannels(); err != nil {
-		logger.Warnf(context.Background(), "[IM] Failed to load channels from database: %v", err)
-	}
-
-	cleaner.RegisterWithName("IMService", func() error {
-		imService.Stop()
-		return nil
-	})
-}
-
-// initConnectorRegistry creates and populates the connector registry with all available connectors.
-// Aggregates registration errors via errors.Join so a misconfigured or duplicated connector fails
-// container initialization loudly instead of silently disabling the feature at runtime.
-func initConnectorRegistry() (*datasource.ConnectorRegistry, error) {
-	registry := datasource.NewConnectorRegistry()
-
-	var errs error
-	if err := registry.Register(wiki.NewConnector(core.RegionFeishu)); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register feishu connector: %w", err))
-	}
-	// Lark is Feishu's international cloud: same connector, different host/tenant.
-	if err := registry.Register(wiki.NewConnector(core.RegionLark)); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register lark connector: %w", err))
-	}
-	// Feishu/Lark Drive (云盘) mode: different connector type so the registry
-	// dispatches to the Drive connector. Shares core.Client/Region/export logic
-	// with the wiki connector. See 飞书云盘数据源设计.md / ADR-0001.
-	if err := registry.Register(drive.NewDriveConnector(core.RegionFeishuDrive)); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register feishu_drive connector: %w", err))
-	}
-	if err := registry.Register(drive.NewDriveConnector(core.RegionLarkDrive)); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register lark_drive connector: %w", err))
-	}
-	if err := registry.Register(notionConnector.NewConnector()); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register notion connector: %w", err))
-	}
-	if err := registry.Register(yuqueConnector.NewConnector()); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register yuque connector: %w", err))
-	}
-	if err := registry.Register(imaConnector.NewConnector()); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register ima connector: %w", err))
-	}
-	if err := registry.Register(rssConnector.NewConnector()); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register rss connector: %w", err))
-	}
-	if err := registry.Register(gitlabConnector.NewConnector()); err != nil {
-		errs = errors.Join(errs, fmt.Errorf("register gitlab connector: %w", err))
-	}
-
-	// Future connectors will be registered here:
-	// if err := registry.Register(confluenceConnector.NewConnector()); err != nil { ... }
-	// if err := registry.Register(githubConnector.NewConnector()); err != nil { ... }
-
-	if errs != nil {
-		return nil, errs
-	}
-	return registry, nil
-}
-
-// startDataSourceScheduler starts the data source cron scheduler and registers cleanup.
-func startDataSourceScheduler(scheduler *datasource.Scheduler, cleaner interfaces.ResourceCleaner) {
-	if err := scheduler.Start(context.Background()); err != nil {
-		logger.Warnf(context.Background(), "[Container] data source scheduler start failed: %v", err)
-	}
-
-	cleaner.RegisterWithName("DataSourceScheduler", func() error {
-		scheduler.Stop()
-		return nil
-	})
-}
-
 // startHousekeepingService starts the knowledge housekeeping cron and registers
 // cleanup. This is the safety net that recovers any knowledge stuck in
 // "processing" past a configurable threshold (see HousekeepingService for
@@ -1730,22 +1555,6 @@ func startHousekeepingService(svc *service.HousekeepingService, cleaner interfac
 		logger.Warnf(context.Background(), "[Container] housekeeping start failed: %v", err)
 	}
 	cleaner.RegisterWithName("KnowledgeHousekeeping", func() error {
-		svc.Stop()
-		return nil
-	})
-}
-
-// startTenantSkillReaper starts the stuck-install / orphan-snapshot cron and
-// registers cleanup. Best-effort: a startup error is logged but does NOT abort
-// the container — the rest of the system stays usable.
-func startTenantSkillReaper(svc *service.TenantSkillService, cleaner interfaces.ResourceCleaner) {
-	if svc == nil {
-		return
-	}
-	if err := svc.Start(context.Background()); err != nil {
-		logger.Warnf(context.Background(), "[Container] tenant skill reaper start failed: %v", err)
-	}
-	cleaner.RegisterWithName("TenantSkillReaper", func() error {
 		svc.Stop()
 		return nil
 	})

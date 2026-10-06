@@ -4,7 +4,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/Tencent/WeKnora/internal/infrastructure/docparser/anydoc"
 	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
@@ -71,42 +70,3 @@ func TestNewReaderRequiresWeKnoraCloudCredentials(t *testing.T) {
 	}
 }
 
-// The anydoc engine is only linked into builds tagged `anydoc`; everywhere
-// else it must be listed as unavailable and refuse to build a reader, so a
-// knowledge base configured for it fails loudly instead of parsing with
-// something else.
-func TestAnydocEngineFollowsBuildAvailability(t *testing.T) {
-	reader, err := NewReader(context.Background(), AnydocEngineName, "docx", false, ReaderDeps{})
-
-	if anydoc.Available() {
-		if err != nil {
-			t.Fatalf("NewReader: %v", err)
-		}
-		if _, ok := reader.(*AnydocReader); !ok {
-			t.Fatalf("reader = %T, want *AnydocReader", reader)
-		}
-		return
-	}
-	if err == nil {
-		t.Fatal("NewReader succeeded without the converter linked in, want an error")
-	}
-}
-
-func TestListAllEnginesIncludesAnydoc(t *testing.T) {
-	for _, engine := range ListAllEngines(true, nil, nil) {
-		if engine.Name != AnydocEngineName {
-			continue
-		}
-		if engine.Available != anydoc.Available() {
-			t.Errorf("anydoc availability = %v, want %v", engine.Available, anydoc.Available())
-		}
-		if !engine.Available && engine.UnavailableReason == "" {
-			t.Error("anydoc is unavailable without a reason to show")
-		}
-		if len(engine.FileTypes) == 0 {
-			t.Error("anydoc lists no file types")
-		}
-		return
-	}
-	t.Fatal("anydoc engine not found in the engine list")
-}

@@ -63,7 +63,6 @@ type SystemHandler struct {
 	// singleton tenant.StorageEngineConfig. Optional — nil in partially-wired
 	// unit tests, in which case only the legacy config is consulted.
 	storageBackendRepo interfaces.StorageBackendRepository
-	sandboxConfigSvc   sandboxConfigService
 	// startup snapshot for GET /system/capabilities; bound in router.NewRouter.
 	deploymentCapabilities DeploymentCapabilitiesData
 }
@@ -80,7 +79,6 @@ func NewSystemHandler(cfg *config.Config,
 	taskInspector interfaces.TaskInspector,
 	knowledgeSvc interfaces.KnowledgeService,
 	storageBackendRepo interfaces.StorageBackendRepository,
-	sandboxConfigSvc *service.TenantSandboxConfigService,
 ) *SystemHandler {
 	return &SystemHandler{
 		cfg:                cfg,
@@ -94,7 +92,6 @@ func NewSystemHandler(cfg *config.Config,
 		taskInspector:      taskInspector,
 		knowledgeSvc:       knowledgeSvc,
 		storageBackendRepo: storageBackendRepo,
-		sandboxConfigSvc:   sandboxConfigSvc,
 	}
 }
 

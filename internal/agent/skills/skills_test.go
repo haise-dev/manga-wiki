@@ -376,7 +376,7 @@ Integration test content.
 		Enabled:       true,
 	}
 
-	manager := NewManager(config, nil) // No sandbox for this test
+	manager := NewManager(config)
 
 	// Initialize
 	ctx := context.Background()

@@ -897,6 +897,7 @@ const sendMsg = async (value, modelId = '', mentionedItems = [], imageFiles = []
         images: imageAttachments.length > 0 ? imageAttachments : undefined,
         attachment_uploads: attachmentUploads.length > 0 ? attachmentUploads : undefined,
         attachment_ids: attachmentIds.length > 0 ? attachmentIds : undefined,
+        max_chapter: useSettingsStoreInstance.mangaMaxChapter > 0 ? useSettingsStoreInstance.mangaMaxChapter : undefined,
         query: value,
         suggestion_attribution: suggestionAttribution || undefined,
         method: 'POST',

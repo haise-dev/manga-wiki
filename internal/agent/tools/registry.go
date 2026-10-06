@@ -145,12 +145,6 @@ func (r *ToolRegistry) ExecuteTool(
 	// This catches invalid arguments early, avoiding a wasted tool execution + LLM round.
 	if validationErrs := ValidateParams(args, tool.Parameters()); len(validationErrs) > 0 {
 		errMsg := FormatValidationErrors(validationErrs)
-		if name == ToolWriteSandboxFile {
-			errMsg += writeSandboxMissingFieldHint
-		}
-		if name == ToolEditSandboxFile {
-			errMsg += editSandboxMissingFieldHint
-		}
 		common.PipelineWarn(ctx, "AgentTool", "validation_failed", map[string]interface{}{
 			"tool":   name,
 			"errors": errMsg,

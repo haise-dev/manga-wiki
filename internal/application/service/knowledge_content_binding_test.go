@@ -11,6 +11,14 @@ import (
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
 
+// bindCall records one Bind invocation for assertions.
+type bindCall struct {
+	ref       string
+	ownerType string
+	ownerID   string
+	relation  string
+}
+
 // resolvingCatalog answers Resolve from a fixed handle → tenant map and records
 // every Bind, which is all bindContentResources exercises.
 type resolvingCatalog struct {

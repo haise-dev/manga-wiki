@@ -49,7 +49,10 @@
                                 <ContentPopup :content="safeProcessContent(chunk.content)" :is-html="true" />
                             </template>
                             <span class="doc-chunk-text">
-                                <span class="doc-chunk-index">{{ $t('chat.chunkLabel', { index: cIdx + 1 }) }}</span>
+                                <span class="doc-chunk-index">{{ formatChunkBadge(chunk, cIdx) }}</span>
+                                <span v-if="getCanonTierBadge(chunk)" class="manga-canon-badge" :class="`canon-tier-${getCanonTierBadge(chunk).tier}`">
+                                    {{ getCanonTierBadge(chunk).label }}
+                                </span>
                                 {{ truncateContent(chunk.content, 80) }}
                             </span>
                         </t-popup>
@@ -168,6 +171,30 @@ const truncateContent = (content, maxLen) => {
     const text = content.replace(/\n/g, ' ').trim();
     if (text.length <= maxLen) return text;
     return text.slice(0, maxLen) + '...';
+};
+
+const formatChunkBadge = (chunk, cIdx) => {
+    const meta = chunk.metadata || {};
+    const chapter = chunk.chapter_number || chunk.chapter_seq || meta.chapter_number || meta.chapter_seq;
+    const page = chunk.page_number || chunk.page || meta.page;
+    if (chapter) {
+        if (page) return `[Ch. ${chapter}, p. ${page}]`;
+        return `[Ch. ${chapter}]`;
+    }
+    return t('chat.chunkLabel', { index: cIdx + 1 });
+};
+
+const getCanonTierBadge = (chunk) => {
+    const tier = chunk.canon_tier || chunk.metadata?.canon_tier;
+    if (!tier) return null;
+    switch (Number(tier)) {
+        case 1: return { tier: 1, label: 'Primary Manga' };
+        case 2: return { tier: 2, label: 'Databook' };
+        case 3: return { tier: 3, label: 'Author Statement' };
+        case 4: return { tier: 4, label: 'Anime' };
+        case 5: return { tier: 5, label: 'Fan Theory' };
+        default: return null;
+    }
 };
 
 const getDocumentHref = (group) => {
@@ -486,6 +513,39 @@ const getWebSearchDisplayText = (item) => {
             color: var(--td-text-color-placeholder);
             font-size: 11px;
             margin-right: 4px;
+        }
+
+        .manga-canon-badge {
+            display: inline-block;
+            font-size: 10px;
+            padding: 1px 4px;
+            border-radius: 3px;
+            margin-right: 4px;
+            font-weight: 500;
+            line-height: 14px;
+            background-color: var(--td-bg-color-secondarycontainer);
+            color: var(--td-text-color-primary);
+
+            &.canon-tier-1 {
+                background-color: rgba(0, 168, 112, 0.12);
+                color: #00a870;
+            }
+            &.canon-tier-2 {
+                background-color: rgba(0, 82, 217, 0.12);
+                color: #0052d9;
+            }
+            &.canon-tier-3 {
+                background-color: rgba(115, 59, 219, 0.12);
+                color: #733bdb;
+            }
+            &.canon-tier-4 {
+                background-color: rgba(237, 123, 47, 0.12);
+                color: #ed7b2f;
+            }
+            &.canon-tier-5 {
+                background-color: rgba(144, 154, 169, 0.16);
+                color: var(--td-text-color-placeholder);
+            }
         }
     }
 }

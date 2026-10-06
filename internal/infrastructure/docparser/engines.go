@@ -4,8 +4,6 @@ import (
 	"context"
 	"strings"
 
-	"github.com/Tencent/WeKnora/internal/infrastructure/docparser/anydoc"
-	"github.com/Tencent/WeKnora/internal/types"
 	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
 
@@ -15,8 +13,6 @@ const (
 	BuiltinEngineName = "builtin"
 	// SimpleEngineName is Go-native handling of text formats and images.
 	SimpleEngineName = "simple"
-	// AnydocEngineName is the in-process anydoc office-document converter.
-	AnydocEngineName = "anydoc"
 	// WeKnoraCloudEngineName is the hosted WeKnora Cloud document reader.
 	WeKnoraCloudEngineName = "weknoracloud"
 	// MinerUEngineName is a self-hosted MinerU service.
@@ -30,28 +26,13 @@ const (
 )
 
 func init() {
-	types.SetPreferParserEngine(preferAnydocWhenAvailable)
 	RegisterEngine(&builtinEngine{})
 	RegisterEngine(&simpleEngine{})
-	RegisterEngine(&anydocEngine{})
 	RegisterEngine(&weKnoraCloudEngine{})
 	RegisterEngine(&mineruEngine{})
 	RegisterEngine(&mineruCloudEngine{})
 	RegisterEngine(&paddleOCRVLEngine{})
 	RegisterEngine(&paddleOCRVLCloudEngine{})
-}
-
-// preferAnydocWhenAvailable is the type-level default override: when the
-// anydoc binding is linked and converts this file type, use it instead of
-// builtin or the markitdown fallback. Simple formats stay on the Go reader.
-func preferAnydocWhenAvailable(fileType string) string {
-	if IsSimpleFormat(fileType) {
-		return ""
-	}
-	if anydoc.Available() && anydoc.Supports(fileType, "") {
-		return AnydocEngineName
-	}
-	return ""
 }
 
 // ---------------------------------------------------------------------------
@@ -115,35 +96,6 @@ func (e *simpleEngine) CheckAvailable(_ bool, _ map[string]string) (bool, string
 
 func (e *simpleEngine) NewReader(_ context.Context, _ ReaderDeps) (interfaces.DocReader, error) {
 	return &SimpleFormatReader{}, nil
-}
-
-// ---------------------------------------------------------------------------
-// anydoc — office documents converted in this process, no external service.
-// Only present in builds that link the converter (see the anydoc package).
-// ---------------------------------------------------------------------------
-
-type anydocEngine struct{}
-
-func (e *anydocEngine) Name() string { return AnydocEngineName }
-
-func (e *anydocEngine) Description() string {
-	return "anydoc in-process office document converter (no external service required)"
-}
-
-func (e *anydocEngine) FileTypes(_ bool) []string { return anydoc.SupportedFileTypes() }
-
-func (e *anydocEngine) CheckAvailable(_ bool, _ map[string]string) (bool, string) {
-	if anydoc.Available() {
-		return true, ""
-	}
-	return false, anydoc.UnavailableReason()
-}
-
-func (e *anydocEngine) NewReader(_ context.Context, deps ReaderDeps) (interfaces.DocReader, error) {
-	if !anydoc.Available() {
-		return nil, errEngineUnavailable(AnydocEngineName, anydoc.UnavailableReason())
-	}
-	return NewAnydocReader(deps.Overrides, deps.Remote), nil
 }
 
 // ---------------------------------------------------------------------------

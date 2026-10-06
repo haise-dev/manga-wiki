@@ -4,7 +4,6 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/Tencent/WeKnora/internal/sandbox"
 	"github.com/gin-gonic/gin"
 )
 
@@ -116,24 +115,16 @@ func (h *SystemHandler) GetDeploymentCapabilities(c *gin.Context) {
 	})
 }
 
-// overlayLiveDockerSandboxCapability replaces the startup snapshot's Docker
-// flag with the live 3-tier value so a System Settings toggle is visible
-// without restarting the process.
+// overlayLiveDockerSandboxCapability ensures settings.sandbox.docker matches registered routes.
 func overlayLiveDockerSandboxCapability(data DeploymentCapabilitiesData) DeploymentCapabilitiesData {
 	caps := make(map[string]DeploymentCapability, len(data.Capabilities))
 	for key, capability := range data.Capabilities {
 		caps[key] = capability
 	}
-	sandboxCap := caps["settings.sandbox"]
-	docker := DeploymentCapability{
-		Supported: sandboxCap.Supported && sandbox.DockerBackendEnabled(),
+	caps["settings.sandbox.docker"] = DeploymentCapability{
+		Supported: false,
+		Reason:    "route_not_registered",
 	}
-	if sandboxCap.Supported && !docker.Supported {
-		docker.Reason = "docker_backend_disabled"
-	} else if !sandboxCap.Supported {
-		docker.Reason = "route_not_registered"
-	}
-	caps["settings.sandbox.docker"] = docker
 	data.Capabilities = caps
 	return data
 }

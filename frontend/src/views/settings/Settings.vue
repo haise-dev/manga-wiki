@@ -44,15 +44,6 @@
                         <path d="M4.5 5.5L6.5 12.5L9 7.5L11.5 12.5L13.5 5.5" stroke="currentColor" stroke-width="1.3"
                           stroke-linecap="round" stroke-linejoin="round" fill="none" />
                       </svg>
-                      <!-- 沙箱：隔离运行窗口，避免和 Ollama / 系统设置共用 server -->
-                      <svg v-else-if="item.key === 'sandbox'" width="17" height="17" viewBox="0 0 18 18" fill="none"
-                        xmlns="http://www.w3.org/2000/svg" class="nav-icon">
-                        <rect x="2.5" y="3" width="13" height="12" rx="2" stroke="currentColor" stroke-width="1.2"
-                          fill="none" />
-                        <path d="M2.5 6.5h13" stroke="currentColor" stroke-width="1.2" />
-                        <path d="M5.5 10h4M5.5 12.5h2.5" stroke="currentColor" stroke-width="1.2"
-                          stroke-linecap="round" />
-                      </svg>
                       <span v-else-if="item.emoji" class="nav-icon nav-icon-emoji">{{ item.emoji }}</span>
                       <t-icon v-else :name="item.icon" class="nav-icon" />
                       <span class="nav-label">{{ item.label }}</span>
@@ -133,11 +124,6 @@
                     <MemorySettings />
                   </div>
 
-                  <!-- 沙箱密钥（成员自己的技能 / 沙箱密钥） -->
-                  <div v-if="currentSection === 'envvars'" class="section">
-                    <EnvVarSettings />
-                  </div>
-
                   <!-- 向量数据库引擎 -->
                   <div v-if="currentSection === 'vectorstore'" class="section">
                     <VectorStoreSettings />
@@ -151,16 +137,6 @@
                   <!-- 存储引擎 -->
                   <div v-if="currentSection === 'storage'" class="section">
                     <StorageEngineSettings />
-                  </div>
-
-                  <!-- 沙箱 -->
-                  <div v-if="currentSection === 'sandbox'" class="section">
-                    <SandboxSettings />
-                  </div>
-
-                  <!-- 技能目录：登记后可装到多份沙箱，智能体只从当前沙箱的就绪集合选用 -->
-                  <div v-if="currentSection === 'skills'" class="section">
-                    <SkillSettings :initial-sandbox-id="currentSubSection" />
                   </div>
 
                   <!-- 系统信息 -->
@@ -240,13 +216,10 @@ import McpSettings from './McpSettings.vue'
 import WebSearchSettings from './WebSearchSettings.vue'
 import ChatHistorySettings from './ChatHistorySettings.vue'
 import MemorySettings from './MemorySettings.vue'
-import EnvVarSettings from './EnvVarSettings.vue'
 import MemoryWorkspaceSettings from './MemoryWorkspaceSettings.vue'
 import VectorStoreSettings from './VectorStoreSettings.vue'
 import ParserEngineSettings from './ParserEngineSettings.vue'
 import StorageEngineSettings from './StorageBackendSettings.vue'
-import SandboxSettings from './SandboxSettings.vue'
-import SkillSettings from './SkillSettings.vue'
 import WeKnoraCloudSettings from './WeKnoraCloudSettings.vue'
 import TenantMembers from './TenantMembers.vue'
 import SystemSettings from '@/views/system/SystemSettings.vue'
@@ -377,8 +350,6 @@ const navItems = computed(() => {
     { key: 'vectorstore', icon: 'data-base', label: t('settings.vectorStoreEngine') },
     { key: 'parser', icon: 'file-search', label: t('settings.parserEngine') },
     { key: 'storage', icon: 'cloud', label: t('settings.storageEngine') },
-    { key: 'sandbox', icon: 'code', label: t('settings.sandbox.title') },
-    { key: 'skills', icon: SKILL_ICON, label: t('settings.skills.title') },
     { key: 'mcp', icon: 'tools', label: t('settings.mcpService') },
     { key: 'system', icon: 'info-circle', label: t('settings.versionInfo') },
     { key: 'system-global', icon: 'server', label: t('settings.system') },
@@ -387,7 +358,6 @@ const navItems = computed(() => {
     { key: 'system-audit-log', icon: 'history', label: t('system.globalSettings.audit.tabLabel') },
     { key: 'userprofile', icon: 'user', label: t('userProfile.title') },
     { key: 'mymemory', icon: 'bookmark', label: t('memorySettings.title') },
-    { key: 'envvars', icon: 'key', label: t('envVarSettings.title') },
     { key: 'tenant', icon: 'user-circle', label: t('settings.tenantInfo') },
     { key: 'members', icon: 'usergroup', label: t('tenantMember.title') },
     ...integrationItems,
@@ -412,7 +382,7 @@ const navGroups = computed<NavGroup[]>(() => {
     {
       key: 'account',
       label: t('settings.navGroups.account'),
-      items: pickItems(['general', 'userprofile', 'mymemory', 'envvars']),
+      items: pickItems(['general', 'userprofile', 'mymemory']),
     },
     {
       key: 'workspace',
@@ -442,8 +412,6 @@ const navGroups = computed<NavGroup[]>(() => {
         'vectorstore',
         'parser',
         'storage',
-        'sandbox',
-        'skills',
         'websearch',
         'mcp',
       ]),

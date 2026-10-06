@@ -3,11 +3,80 @@ package service
 import (
 	"context"
 	"errors"
+	"io"
+	"mime/multipart"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/Tencent/WeKnora/internal/types"
+	"github.com/Tencent/WeKnora/internal/types/interfaces"
 )
+
+type fakeFileService struct {
+	saved     map[string][]byte
+	saveErr   error
+	seq       int
+	tenantIDs []uint64
+}
+
+func (f *fakeFileService) CheckConnectivity(_ context.Context) error { return nil }
+func (f *fakeFileService) SaveFile(_ context.Context, _ *multipart.FileHeader, _ uint64, _ string) (string, error) {
+	panic("unused")
+}
+func (f *fakeFileService) SaveBytes(_ context.Context, data []byte, tenantID uint64, fileName string, _ bool) (string, error) {
+	return "", nil
+}
+func (f *fakeFileService) GetFile(_ context.Context, _ string) (io.ReadCloser, error) {
+	panic("unused")
+}
+func (f *fakeFileService) GetFileURL(_ context.Context, _ string) (string, error) {
+	panic("unused")
+}
+func (f *fakeFileService) DeleteFile(_ context.Context, _ string) error { return nil }
+func (f *fakeFileService) CopyFile(_ context.Context, _ string, _ uint64, _ string) (string, error) {
+	panic("unused")
+}
+
+type fakeCatalog struct {
+	binds            []bindCall
+	bindErr          error
+	releaseRemaining map[string]int64
+	releaseErr       error
+	releases         []string
+}
+
+func (c *fakeCatalog) Register(context.Context, uint64, string, interfaces.ResourceRegistration) (string, error) {
+	return "", nil
+}
+func (c *fakeCatalog) Resolve(context.Context, string) (*types.StoredResource, error) {
+	return nil, nil
+}
+func (c *fakeCatalog) ResolvePath(_ context.Context, v string) (string, *types.StoredResource, error) {
+	return v, nil, nil
+}
+func (c *fakeCatalog) Bind(_ context.Context, ref, ownerType, ownerID, relation string) error {
+	c.binds = append(c.binds, bindCall{ref, ownerType, ownerID, relation})
+	return c.bindErr
+}
+func (c *fakeCatalog) MarkDeleted(context.Context, string) error { return nil }
+
+func (c *fakeCatalog) Release(_ context.Context, ref, ownerType, ownerID string) (int64, error) {
+	c.releases = append(c.releases, ref+"|"+ownerType+"|"+ownerID)
+	if c.releaseErr != nil {
+		return -1, c.releaseErr
+	}
+	if remaining, ok := c.releaseRemaining[ref]; ok {
+		return remaining, nil
+	}
+	return -1, nil
+}
+func (c *fakeCatalog) CreateAccessGrant(context.Context, string, time.Duration) (string, error) {
+	return "", nil
+}
+func (c *fakeCatalog) ResolveAccessGrant(context.Context, string) (*types.StoredResource, error) {
+	return nil, nil
+}
 
 // deleteRecorder captures which files a cleanup actually removed.
 type deleteRecorder struct {

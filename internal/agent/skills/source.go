@@ -18,15 +18,3 @@ type SkillSource interface {
 
 var _ SkillSource = (*Loader)(nil)
 
-// imageSkillSource is a source whose skills already exist inside the sandbox
-// image. It is what separates the two sources at execution time: a host skill
-// lives on the WeKnora machine and has to be uploaded into the sandbox, while
-// an installed skill is already there and is executed in place.
-type imageSkillSource interface {
-	SkillSource
-
-	// RemoteScriptPath returns the absolute in-sandbox path of one script.
-	RemoteScriptPath(name, relativePath string) (string, error)
-}
-
-var _ imageSkillSource = (*TenantSkillSource)(nil)

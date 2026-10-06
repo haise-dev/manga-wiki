@@ -40,42 +40,6 @@ func RegisterModelRoutes(
 	}
 }
 
-// Sandbox configs are workspace infrastructure that hold provider credentials.
-// Scoped API keys cannot safely receive partial authority over them yet because
-// mutation can strand remote sandboxes.
-func RegisterSandboxConfigRoutes(
-	r *gin.RouterGroup,
-	h *handler.SandboxConfigHandler,
-	skills *handler.SandboxSkillHandler,
-	g *rbacGuards,
-) {
-	configs := g.apiKeyGroup(r.Group("/sandbox-configs"), apiKeyFullAccess())
-	{
-		configs.GET("", g.Viewer(), h.List)
-		configs.PUT("/workspace-policy", g.Admin(), h.SetWorkspacePolicy)
-		configs.POST("/templates/query", g.Admin(), h.QueryTemplates)
-		configs.POST("", g.Admin(), h.Create)
-		configs.GET("/:id", g.Viewer(), h.Get)
-		configs.PUT("/:id", g.Admin(), h.Update)
-		configs.DELETE("/:id", g.Admin(), h.Delete)
-		configs.GET("/:id/sandboxes", g.Admin(), h.Inventory)
-		// Skills are Admin+ throughout, reads included: an upload drives a
-		// root shell whose output is baked into the image every session of
-		// this config boots, and the listing names what that image carries.
-		configs.GET("/:id/skills", g.Admin(), skills.List)
-		configs.POST("/:id/skills", g.Admin(), skills.Upload)
-		configs.GET("/:id/skills/:skillId", g.Admin(), skills.Get)
-		configs.GET("/:id/skills/:skillId/files", g.Admin(), skills.ListFiles)
-		configs.GET("/:id/skills/:skillId/files/content", g.Admin(), skills.GetFile)
-		configs.POST("/:id/skills/:skillId/reinstall", g.Admin(), skills.Reinstall)
-		configs.POST("/:id/skills/:skillId/stop", g.Admin(), skills.Stop)
-		configs.PATCH("/:id/skills/:skillId", g.Admin(), skills.Patch)
-		configs.DELETE("/:id/skills/:skillId", g.Admin(), skills.Delete)
-		configs.GET("/:id/skills/:skillId/install-events", g.Admin(), skills.InstallEvents)
-		configs.GET("/:id/skills/:skillId/transcript", g.Admin(), skills.InstallTranscript)
-	}
-}
-
 // RegisterEvaluationRoutes registers evaluation endpoints. Running an
 // evaluation drives LLM calls (cost) and reads from KBs across the
 // tenant; gate to Admin+ until product asks for a finer-grained
@@ -277,54 +241,6 @@ func RegisterStorageBackendRoutes(r *gin.RouterGroup, h *handler.StorageBackendH
 
 // RegisterDataSourceRoutes 注册数据源相关的路由
 //
-// Data sources hold external service credentials (Feishu/Notion/Yuque)
-// and trigger sync jobs that mutate KB content tenant-wide. Reads are
-// Viewer+; everything else (CRUD, validation, sync control, credential
-// subresource) is Admin+.
-func RegisterDataSourceRoutes(
-	r *gin.RouterGroup,
-	handler *handler.DataSourceHandler,
-	credHandler *handler.DataSourceCredentialsHandler,
-	g *rbacGuards,
-) {
-	// Data source routes
-	ds := g.apiKeyGroup(r.Group("/datasource"), apiKeyManageDataSources(apiKeyFullAccess()))
-	{
-		// Get available connector types — Viewer+
-		ds.GET("/types", g.Viewer(), handler.GetAvailableConnectors)
-
-		// Validate credentials without persistence (for "Test Connection" button) — Admin+
-		ds.POST("/validate-credentials", g.Admin(), handler.ValidateCredentials)
-
-		// CRUD operations
-		ds.POST("", g.Admin(), handler.CreateDataSource)
-		ds.GET("", g.Viewer(), handler.ListDataSources)
-		ds.GET("/:id", g.Viewer(), handler.GetDataSource)
-		ds.PUT("/:id", g.Admin(), handler.UpdateDataSource)
-		ds.DELETE("/:id", g.Admin(), handler.DeleteDataSource)
-
-		// Credential subresource. Single logical field "credentials" because
-		// connector credentials are a per-connector atomic map (see
-		// internal/handler/datasource_credentials.go). — Admin+
-		ds.PUT("/:id/credentials", g.Admin(), credHandler.Put)
-		ds.DELETE("/:id/credentials/:field", g.Admin(), credHandler.DeleteField)
-
-		// Connection and resource management — Admin+
-		ds.POST("/:id/validate", g.Admin(), handler.ValidateConnection)
-		ds.GET("/:id/resources", g.Admin(), handler.ListAvailableResources)
-		ds.POST("/:id/resource-ancestors", g.Admin(), handler.ResolveResourceAncestors)
-
-		// Sync management — Admin+
-		ds.POST("/:id/sync", g.Admin(), handler.ManualSync)
-		ds.POST("/:id/pause", g.Admin(), handler.PauseDataSource)
-		ds.POST("/:id/resume", g.Admin(), handler.ResumeDataSource)
-
-		// Sync logs — Viewer+ (read-only audit trail)
-		ds.GET("/:id/logs", g.Viewer(), handler.GetSyncLogs)
-		ds.GET("/logs/:log_id", g.Viewer(), handler.GetSyncLog)
-	}
-}
-
 // RegisterWeKnoraCloudRoutes 注册 WeKnoraCloud 初始化路由
 // RegisterWeKnoraCloudRoutes registers the WeKnoraCloud credential
 // management endpoints. SaveCredentials persists external SaaS keys

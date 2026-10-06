@@ -419,11 +419,6 @@
                   />
                 </div>
 
-                <!-- 数据源管理（仅编辑模式） -->
-                <div v-if="editorMode === 'edit' && activeKbId && currentSection === 'datasource'" class="section">
-                  <DataSourceSettings :kb-id="activeKbId" @count="dsCount = $event" />
-                </div>
-
                 <!-- 共享设置（仅编辑模式） -->
                 <div v-if="editorMode === 'edit' && activeKbId && currentSection === 'share'" class="section">
                   <KBShareSettings :kb-id="activeKbId" :can-share="canShareKB" />
@@ -487,7 +482,6 @@ import KBAdvancedSettings from './settings/KBAdvancedSettings.vue'
 import ModelSelector from '@/components/ModelSelector.vue'
 import GraphSettings from './settings/GraphSettings.vue'
 import KBShareSettings from './settings/KBShareSettings.vue'
-import DataSourceSettings from './settings/DataSourceSettings.vue'
 import KnowledgeBaseActivitySettings from './settings/KnowledgeBaseActivitySettings.vue'
 import { useI18n } from 'vue-i18n'
 
@@ -621,9 +615,6 @@ const navItems = computed(() => {
       { key: 'graph', icon: 'chart-bubble', label: t('knowledgeEditor.sidebar.graph') },
       { key: 'advanced', icon: 'setting', label: t('knowledgeEditor.sidebar.advanced') }
     )
-    if (editorMode.value === 'edit' && activeKbId.value) {
-      items.push({ key: 'datasource', icon: 'cloud-download', label: t('knowledgeEditor.sidebar.datasource'), badge: dsCount.value || undefined })
-    }
   }
   if (editorMode.value === 'edit' && activeKbId.value && !authStore.isLiteMode) {
     items.push({ key: 'share', icon: 'share', label: t('knowledgeEditor.sidebar.share') })
@@ -653,7 +644,7 @@ const navGroups = computed(() => {
     {
       key: 'data',
       label: t('knowledgeEditor.navGroups.data'),
-      items: pickItems(['storage', 'datasource']),
+      items: pickItems(['storage']),
     },
     {
       key: 'integration',

@@ -561,6 +561,30 @@
                 </div>
               </div>
 
+              <!-- Manga Entity Infobox -->
+              <div v-if="!editingPage && isMangaEntity(selectedPage)" class="manga-infobox-card">
+                <div class="manga-infobox-header">
+                  <span class="manga-infobox-title">{{ selectedPage.title }}</span>
+                  <t-tag v-if="selectedPage.status" size="small" :theme="selectedPage.status === 'alive' ? 'success' : 'default'">
+                    {{ selectedPage.status }}
+                  </t-tag>
+                </div>
+                <div class="manga-infobox-grid">
+                  <div v-if="getMangaAliases(selectedPage).length" class="manga-infobox-row">
+                    <span class="manga-infobox-label">Aliases:</span>
+                    <span class="manga-infobox-val">{{ getMangaAliases(selectedPage).join(', ') }}</span>
+                  </div>
+                  <div v-if="getMangaDebut(selectedPage)" class="manga-infobox-row">
+                    <span class="manga-infobox-label">Debut:</span>
+                    <span class="manga-infobox-val">Chapter {{ getMangaDebut(selectedPage) }}</span>
+                  </div>
+                  <div class="manga-infobox-row">
+                    <span class="manga-infobox-label">Authority:</span>
+                    <span class="manga-infobox-val"><t-tag size="small" theme="primary" variant="light">Primary Canon</t-tag></span>
+                  </div>
+                </div>
+              </div>
+
               <!-- Content -->
               <div v-if="!editingPage" ref="readerBodyRef" class="wiki-reader-body" v-html="renderedContent"
                 @click="handleContentClick">
@@ -3704,6 +3728,21 @@ function slugDisplayName(slug: string): string {
   return parts.length > 1 ? parts.slice(1).join('/') : slug
 }
 
+function isMangaEntity(page: any): boolean {
+  if (!page) return false
+  return page.page_type === 'entity' || page.category_path?.includes('Character') || page.category_path?.includes('Entity')
+}
+
+function getMangaAliases(page: any): string[] {
+  if (Array.isArray(page?.aliases)) return page.aliases
+  if (page?.metadata?.aliases && Array.isArray(page.metadata.aliases)) return page.metadata.aliases
+  return []
+}
+
+function getMangaDebut(page: any): number | string | null {
+  return page?.first_appearance_chapter_seq || page?.metadata?.debut_chapter || page?.metadata?.chapter_seq || null
+}
+
 // ─── Graph Rendering (interactive SVG force-directed graph) ───
 // Features: drag nodes, pan canvas, zoom, hover highlight, click to open drawer, legend
 
@@ -5758,6 +5797,55 @@ onUnmounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+}
+
+.manga-infobox-card {
+  margin: 0 0 16px 0;
+  padding: 12px 16px;
+  background: var(--td-bg-color-secondarycontainer);
+  border: 1px solid var(--td-component-stroke);
+  border-left: 3px solid var(--td-brand-color);
+  border-radius: 6px;
+
+  .manga-infobox-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 8px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--td-component-stroke);
+
+    .manga-infobox-title {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--td-text-color-primary);
+    }
+  }
+
+  .manga-infobox-grid {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .manga-infobox-row {
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+    line-height: 1.5;
+
+    .manga-infobox-label {
+      width: 80px;
+      flex-shrink: 0;
+      color: var(--td-text-color-secondary);
+      font-weight: 500;
+    }
+
+    .manga-infobox-val {
+      color: var(--td-text-color-primary);
+      flex: 1;
+    }
+  }
 }
 
 .wiki-link-group {

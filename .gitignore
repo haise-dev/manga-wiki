@@ -30,7 +30,6 @@ logs/
 
 WeKnora
 WeKnora-lite
-cmd/desktop/build/bin/
 /models/
 test/data/mswag.txt
 data/files/
@@ -54,9 +53,6 @@ Claude.md
 # 本地测试脚本
 configure-ollama.sh
 fix-docker.sh
-
-# WeChat Mini Program local/private configuration
-miniprogram/project.private.config.json
 
 # Staging dir for the Docker sandbox self-check probe (removed after each run)
 .weknora-sandbox-check-*

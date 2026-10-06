@@ -67,30 +67,6 @@ func RegisterUserFavoriteRoutes(r *gin.RouterGroup, h *handler.UserResourceFavor
 	}
 }
 
-// RegisterSkillRoutes registers skill routes.
-//
-// PR 2 currently only exposes a read-only `ListSkills`; gated to
-// Viewer+. Future skill upload / enable endpoints must use Admin+ since
-// skills run sandboxed code on tenant resources.
-func RegisterSkillRoutes(r *gin.RouterGroup, skillHandler *handler.SkillHandler, g *rbacGuards) {
-	skills := r.Group("/skills")
-	{
-		// Usable skills for @ mention / chat — Viewer+
-		skills.GET("", g.Viewer(), skillHandler.ListSkills)
-		// Catalog reads are Viewer+ so the agent editor can show uninstalled skills.
-		skills.GET("/catalog", g.Viewer(), skillHandler.ListCatalog)
-	}
-	// Catalog writes bake into sandbox images; scoped API keys cannot hold them.
-	catalogWrite := g.apiKeyGroup(r.Group("/skills/catalog"), apiKeyFullAccess())
-	{
-		catalogWrite.POST("", g.Admin(), skillHandler.RegisterCatalog)
-		catalogWrite.POST("/:id/install", g.Admin(), skillHandler.InstallCatalog)
-		catalogWrite.GET("/:id/files", g.Admin(), skillHandler.ListCatalogFiles)
-		catalogWrite.GET("/:id/files/content", g.Admin(), skillHandler.GetCatalogFile)
-		catalogWrite.DELETE("/:id", g.Admin(), skillHandler.DeleteCatalog)
-	}
-}
-
 // RegisterOrganizationRoutes registers organization and sharing routes
 func RegisterOrganizationRoutes(r *gin.RouterGroup, orgHandler *handler.OrganizationHandler, g *rbacGuards) {
 	// Organization routes
@@ -275,47 +251,6 @@ func RegisterEmbedChannelRoutes(r *gin.RouterGroup, embedHandler *handler.EmbedC
 		channels.POST("/:channel_id/rotate-token", g.Admin(), embedHandler.RotateEmbedToken)
 		channels.POST("/:channel_id/preview-session", g.Viewer(), embedHandler.IssuePreviewSession)
 		channels.GET("/:channel_id/stats", g.Viewer(), embedHandler.GetEmbedChannelStats)
-	}
-}
-
-// RegisterIMRoutes registers IM callback routes.
-// These are registered BEFORE auth middleware since IM platforms use their own signature verification.
-func RegisterIMRoutes(r *gin.Engine, imHandler *handler.IMHandler) {
-	im := r.Group("/api/v1/im")
-	{
-		im.GET("/callback/:channel_id", imHandler.IMCallback)
-		im.POST("/callback/:channel_id", imHandler.IMCallback)
-	}
-}
-
-// RegisterIMChannelRoutes registers IM channel CRUD routes (requires authentication).
-//
-// IM channels carry external bot credentials (WeChat/Feishu/Slack/...);
-// listing is Viewer+ but any mutation, toggle, or QR-code login flow
-// (which can hijack a personal WeChat session) is Admin+.
-func RegisterIMChannelRoutes(r *gin.RouterGroup, imHandler *handler.IMHandler, g *rbacGuards) {
-	// Channel CRUD under agents
-	agentChannels := g.apiKeyGroup(r.Group("/agents/:id/im-channels"), apiKeyManageChannels(apiKeyFullAccess()))
-	{
-		agentChannels.POST("", g.Admin(), imHandler.CreateIMChannel)
-		agentChannels.GET("", g.Viewer(), imHandler.ListIMChannels)
-	}
-
-	// Channel operations by channel ID
-	channels := g.apiKeyGroup(r.Group("/im-channels"), apiKeyManageChannels(apiKeyFullAccess()))
-	{
-		channels.GET("", g.Viewer(), imHandler.ListAllIMChannels)
-		channels.PUT("/:id", g.Admin(), imHandler.UpdateIMChannel)
-		channels.DELETE("/:id", g.Admin(), imHandler.DeleteIMChannel)
-		channels.POST("/:id/toggle", g.Admin(), imHandler.ToggleIMChannel)
-	}
-
-	// WeChat QR code login (requires authentication) — Admin+: a successful
-	// scan binds a personal WeChat account to the tenant.
-	wechatGroup := g.apiKeyGroup(r.Group("/wechat"), apiKeyManageChannels(apiKeyFullAccess()))
-	{
-		wechatGroup.POST("/qrcode", g.Admin(), imHandler.WeChatGetQRCode)
-		wechatGroup.POST("/qrcode/status", g.Admin(), imHandler.WeChatPollQRCodeStatus)
 	}
 }
 
