@@ -296,9 +296,6 @@ func BuildContainer(container *dig.Container) *dig.Container {
 
 	must(container.Invoke(startAuditLogRetention))
 	logger.Debugf(ctx, "[Container] Audit log retention runner registered")
-	must(container.Provide(service.NewHousekeepingService))
-	must(container.Invoke(startHousekeepingService))
-	logger.Debugf(ctx, "[Container] Knowledge housekeeping runner registered")
 	must(container.Provide(chatpipeline.NewEventManager))
 	must(container.Invoke(chatpipeline.NewPluginSearch))
 	must(container.Invoke(chatpipeline.NewPluginRerank))
@@ -1540,24 +1537,6 @@ func registerWebSearchProviders(registry *infra_web_search.Registry) {
 	registry.Register("zhipu", infra_web_search.NewZhipuProvider)
 	registry.Register("exa", infra_web_search.NewExaProvider)
 	registry.Register("metaso", infra_web_search.NewMetasoProvider)
-}
-
-// startHousekeepingService starts the knowledge housekeeping cron and registers
-// cleanup. This is the safety net that recovers any knowledge stuck in
-// "processing" past a configurable threshold (see HousekeepingService for
-// rationale). Best-effort: a startup error is logged but does NOT abort the
-// container — the rest of the system stays usable.
-func startHousekeepingService(svc *service.HousekeepingService, cleaner interfaces.ResourceCleaner) {
-	if svc == nil {
-		return
-	}
-	if err := svc.Start(context.Background()); err != nil {
-		logger.Warnf(context.Background(), "[Container] housekeeping start failed: %v", err)
-	}
-	cleaner.RegisterWithName("KnowledgeHousekeeping", func() error {
-		svc.Stop()
-		return nil
-	})
 }
 
 // startTemporaryDocumentCleanup removes expired session attachments and their
